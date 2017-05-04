@@ -173,7 +173,7 @@ for lambda0 in [10,1,0.1,0.01]:
                     fea_loc = np.where(fea_mask < fea_fraction)
                     random_mat = np.random.random(train_label.shape)
                     label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
-                    W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda0,kx)
+                    W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda1,kx)
                     auc_score = acc_label(train_label,W_pu,H_pu,label_loc)
                     gd_auc_score_list.append(auc_score)
                     U,V,W,H = completionPUV(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)

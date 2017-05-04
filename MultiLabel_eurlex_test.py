@@ -81,7 +81,7 @@ def completionLR(X,kx,fea_loc,lambdaU,lambdaV):
 
     return U.get_value(),V.get_value()
 
-def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
+def completionPU(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
 
     #delta = 0.3
     ### masking out some entries from feature and label matrix
@@ -181,43 +181,28 @@ gd_reconstruction_error_list = []
 gd_auc_score_list = []
 reconstruction_error_list = []
 auc_score_list = []
+alpha = (1. + 0.5)/2
+fea_fraction = 0.8
+label_fraction = 0.8
+kx = 10
 
-for iround in range(10): ### repeat for 10 times
-    alpha = (1. + 0.5)/2
-    fea_mask = np.random.random(all_fea.shape)
-    fea_fraction = 0.8
-    fea_loc = np.where(fea_mask < fea_fraction)
-    random_mat = np.random.random(all_label.shape)
-    label_fraction = 0.8
-    label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
-
-    vlambda = 1
-    kx = 10
-    #W_pu,H_pu = baselinePU(train_label,label_fraction,alpha,vlambda,kx)
-    W_pu,H_pu = baselinePU(all_label,label_loc,alpha,vlambda,kx)
-    auc_score = acc_label(all_label,W_pu,H_pu,label_loc)
-    #print auc_score
-    gd_auc_score_list.append(auc_score)
-
-    lambda0 = 1
-    lambda1 = 1
-    lambda2 = 0.1 ### constraint to keep consistency between U and W
-    #lambdaW = 0.001
-    delta = 10
-    #beta = 0.001
-    #U,V,H = completionPU(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
-    U,V,W,H = completionPUV(all_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
-    #kx = 10
-    #ky = kx
-    #U,V,H = completionPUV3(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
-    auc_score = acc_label(all_label,W,H,label_loc)
-    reconstruction_error = acc_feature(all_fea,U,V,fea_loc)
-    auc_score_list.append(auc_score)
-    reconstruction_error_list.append(reconstruction_error)
-    #auc_score = acc_label(train_label,U,H,label_loc)
-    #print auc_score
-    #reconstruction_error = acc_feature(train_fea,U,V,fea_loc)
-    #print reconstruction_error
-    U_lr, V_lr = completionLR(all_fea,kx,fea_loc,lambda0,lambda0)
-    reconstruction_error = acc_feature(all_fea,U_lr,V_lr,fea_loc)
-    gd_reconstruction_error_list.append(reconstruction_error)
+for lambda0 in [10,1,0.1,0.01]:
+    for lambda1 in [10,1,0.1,0.01]:
+        for lambda2 in [10,1,0.1,0.01]:
+            for delta in [10,1,0.1]:
+                for iround in range(10): ### repeat for 10 times
+                    fea_mask = np.random.random(all_fea.shape)
+                    fea_loc = np.where(fea_mask < fea_fraction)
+                    random_mat = np.random.random(all_label.shape)
+                    label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
+                    W_pu,H_pu = baselinePU(all_label,label_loc,alpha,lambda1,kx)
+                    auc_score = acc_label(all_label,W_pu,H_pu,label_loc)
+                    gd_auc_score_list.append(auc_score)
+                    U,V,W,H = completionPU(all_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
+                    auc_score = acc_label(all_label,W,H,label_loc)
+                    reconstruction_error = acc_feature(all_fea,U,V,fea_loc)
+                    auc_score_list.append(auc_score)
+                    reconstruction_error_list.append(reconstruction_error)
+                    U_lr, V_lr = completionLR(all_fea,kx,fea_loc,lambda0,lambda0)
+                    reconstruction_error = acc_feature(all_fea,U_lr,V_lr,fea_loc)
+                    gd_reconstruction_error_list.append(reconstruction_error)
