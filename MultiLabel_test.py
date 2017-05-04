@@ -130,7 +130,7 @@ def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
 
 #### generate data
 #### yeast: classes 14, data: 1500+917, dimensionality: 103
-train_file = open('data/Mediamill/Mediamill_data.txt','r')
+train_file = open('Mediamill_data.txt','r')
 train_file_lines = train_file.readlines(100000000000000000)
 train_file.close()
 train_fea = np.zeros((43907,120),dtype=float)
@@ -159,42 +159,30 @@ gd_auc_score_list = []
 reconstruction_error_list = []
 auc_score_list = []
 
-for iround in range(10): ### repeat for 10 times
-    alpha = (1. + 0.5)/2
-    fea_mask = np.random.random(train_fea.shape)
-    fea_fraction = 0.8
-    fea_loc = np.where(fea_mask < fea_fraction)
-    random_mat = np.random.random(train_label.shape)
-    label_fraction = 0.8
-    label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
+kx = 10
+alpha = (1. + 0.5)/2
+fea_fraction = 0.8
+label_fraction = 0.8
 
-    vlambda = 1
-    kx = 10
-    #W_pu,H_pu = baselinePU(train_label,label_fraction,alpha,vlambda,kx)
-    W_pu,H_pu = baselinePU(train_label,label_loc,alpha,vlambda,kx)
-    auc_score = acc_label(train_label,W_pu,H_pu,label_loc)
-    #print auc_score
-    gd_auc_score_list.append(auc_score)
+for lambda0 in [10,1,0.1,0.01]:
+    for lambda1 in [10,1,0.1,0.01]:
+        for lambda2 in [10,1,0.1,0.01]:
+            for delta in [10,1,0.1]:
+                for iround in range(10): ### repeat for 10 times
+                    fea_mask = np.random.random(train_fea.shape)
+                    fea_loc = np.where(fea_mask < fea_fraction)
+                    random_mat = np.random.random(train_label.shape)
+                    label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
+                    W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda0,kx)
+                    auc_score = acc_label(train_label,W_pu,H_pu,label_loc)
+                    gd_auc_score_list.append(auc_score)
+                    U,V,W,H = completionPUV(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
+                    auc_score = acc_label(train_label,W,H,label_loc)
+                    reconstruction_error = acc_feature(train_fea,U,V,fea_loc)
+                    auc_score_list.append(auc_score)
+                    reconstruction_error_list.append(reconstruction_error)
+                    U_lr, V_lr = completionLR(train_fea,kx,fea_loc,lambda0,lambda0)
+                    reconstruction_error = acc_feature(train_fea,U_lr,V_lr,fea_loc)
+                    gd_reconstruction_error_list.append(reconstruction_error)
 
-    lambda0 = 1
-    lambda1 = 1
-    lambda2 = 0.1 ### constraint to keep consistency between U and W
-    #lambdaW = 0.001
-    delta = 10
-    #beta = 0.001
-    #U,V,H = completionPU(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
-    U,V,W,H = completionPUV(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
-    #kx = 10
-    #ky = kx
-    #U,V,H = completionPUV3(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
-    auc_score = acc_label(train_label,W,H,label_loc)
-    reconstruction_error = acc_feature(train_fea,U,V,fea_loc)
-    auc_score_list.append(auc_score)
-    reconstruction_error_list.append(reconstruction_error)
-    #auc_score = acc_label(train_label,U,H,label_loc)
-    #print auc_score
-    #reconstruction_error = acc_feature(train_fea,U,V,fea_loc)
-    #print reconstruction_error
-    U_lr, V_lr = completionLR(train_fea,kx,fea_loc,lambda0,lambda0)
-    reconstruction_error = acc_feature(train_fea,U_lr,V_lr,fea_loc)
-    gd_reconstruction_error_list.append(reconstruction_error)
+
