@@ -198,7 +198,7 @@ for lambda0 in [10,1,0.1,0.01]:
                     W_pu,H_pu = baselinePU(all_label,label_loc,alpha,lambda1,kx)
                     auc_score = acc_label(all_label,W_pu,H_pu,label_loc)
                     gd_auc_score_list.append(auc_score)
-                    U,V,W,H = completionPU(all_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
+                    U,V,W,H = completionPU(all_fea,all_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
                     auc_score = acc_label(all_label,W,H,label_loc)
                     reconstruction_error = acc_feature(all_fea,U,V,fea_loc)
                     auc_score_list.append(auc_score)
