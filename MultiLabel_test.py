@@ -127,6 +127,59 @@ def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
 
     return U.get_value(),V.get_value(),W.get_value(),H.get_value()
 
+def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,lambda0,kx):
+    ### X: feature matrix 
+    ### Y: label matrix 
+    ### fea_loc_x, fea_loc_y: masked entries in feature matrix 
+    ### label_loc_x, label_loc_y: masked entries in label matrix 
+    ### miu: regularisation parameter on matrix rank 
+    ### lambda0: regularisation parameter on label reconstruction 
+    ### kx: dimensionality of latent variables used for solving nuclear norm based regularisation 
+    M = np.concatenate((Y,X),axis=1)
+    M = M.T
+
+    label_dim = Y.shape[1]
+    fea_dim = X.shape[1]
+    gamma = 15.
+    featuremask = np.ones(M.shape)
+    labelmask = np.ones(M.shape)
+    for i in range(len(label_loc_x)):
+        labelmask[label_loc_y[i],label_loc_x[i]] = 0.
+
+    for i in range(len(fea_loc_x)):
+        featuremask[fea_loc_y[i]+label_dim,fea_loc_x[i]] = 0.
+
+    #### Theano and downhill
+    U = theano.shared(np.random.random((M.shape[0],kx)),name='U')
+    V = theano.shared(np.random.random((M.shape[1],kx)),name='V')
+
+    #### feature loss
+    M_symbolic = theano.tensor.matrix(name="M", dtype=M.dtype)
+    reconstruction = theano.tensor.dot(U, V.T)
+    difference = M_symbolic - reconstruction
+    masked_difference = difference * featuremask
+    err = theano.tensor.sqr(masked_difference)
+    mse = err.mean()
+    xloss = (1./float(len(fea_loc_x))) * mse + miu * ((U * U).mean() + (V * V).mean())
+    #### label loss
+    label_reconstruction_kernel = -1 * gamma * (2 * M - 1) * (reconstruction - M)
+    label_reconstruction_difference = (1./gamma) * theano.tensor.log(1 + theano.tensor.exp(label_reconstruction_kernel)) * labelmask
+    label_err = (1./float(len(label_loc_x))) * label_reconstruction_difference.mean()
+    global_loss = xloss + lambda0 * label_err
+
+    #### optimisation
+    downhill.minimize(
+            loss=global_loss,
+            train = [M],
+            inputs = [M_symbolic],
+            patience=0,
+            algo='rmsprop',
+            batch_size= M.shape[0],
+            max_gradient_norm=1,
+            learning_rate=0.1,
+            min_improvement = 0.01)
+
+    return U.get_value(),V.get_value()
 
 #### generate data
 #### yeast: classes 14, data: 1500+917, dimensionality: 103
