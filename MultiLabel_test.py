@@ -239,3 +239,15 @@ for lambda0 in [10,1,0.1,0.01]:
                     gd_reconstruction_error_list.append(reconstruction_error)
 
 
+parameters_setting = []
+for lambda0 in [10,1,0.1,0.01]:
+    for lambda1 in [10,1,0.1,0.01]:
+        for lambda2 in [10,1,0.1,0.01]:
+            for delta in [10,1,0.1]:
+                parameters_setting.append((lambda0,lambda1,lambda2,delta))
+
+
+import pickle
+with open('results_15.pickle','wb') as f:
+    pickle.dump([gd_reconstruction_error_list,gd_auc_score_list,reconstruction_error_list,auc_score_list,parameters_setting],f)
+

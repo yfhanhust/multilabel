@@ -34,9 +34,11 @@ mean_reconstruction_error = np.mean(reconstruction_error,axis=1)
 mean_auc_score = np.mean(auc_score,axis=1)
     
 import matplotlib.pyplot as plt
-plt.plot(range(192),mean_gd_reconstruction_error)
-plt.plot(range(192),mean_reconstruction_error)
-plt.show()
+#plt.plot(range(192),mean_gd_reconstruction_error)
+#plt.plot(range(192),mean_reconstruction_error)
+#plt.show()
+
+
 
 
 plt.plot(range(192),mean_gd_auc_score,'b')
