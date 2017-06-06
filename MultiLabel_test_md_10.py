@@ -237,28 +237,30 @@ def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx
     mask[fea_loc] = 0.
     labelmask = np.ones(Y.shape)
     labelmask[label_loc] = 0
-    
+    feature_mask = tf.Variable(mask,dtype=tf.float32)
+    label_mask = tf.Variable(labelmask,dtype=tf.float32)
     #### trianing data index 
 
     #### tensorflow placeholder
-    F = tf.placeholder(tf.float32,[X.shape[0],X.shape[1]])
-    L = tf.placeholder(tf.float32,[Y.shape[0],Y.shape[1]])
+    F = tf.Variable(X,dtype=tf.float32)
+    L = tf.Variable(Y,dtype=tf.float32)
     
     #### tensorflow variable 
-    U = tf.Variable(tf.zeros([X.shape[0],kx]))
-    V = tf.Variable(tf.zeros([X.shape[1],kx]))
-    W = tf.Variable(tf.zeros([Y.shape[0],kx]))
-    H = tf.Variable(tf.zeros([Y.shape[1],kx]))
+    U = tf.Variable(tf.zeros([X.shape[0],kx]),dtype=tf.float32)
+    V = tf.Variable(tf.zeros([X.shape[1],kx]),dtype=tf.float32)
+    W = tf.Variable(tf.zeros([Y.shape[0],kx]),dtype=tf.float32)
+    H = tf.Variable(tf.zeros([Y.shape[1],kx]),dtype=tf.float32)
     #### Theano and downhill
     #U = theano.shared(np.random.random((X.shape[0],kx)),name='U')
     #V = theano.shared(np.random.random((X.shape[1],kx)),name='V')
     #W = theano.shared(np.random.random((Y.shape[0],kx)),name='W')
     #H = theano.shared(np.random.random((Y.shape[1],kx)),name='H')
     ##### tensorflow objective function 
+    UV = tf.matmul(U,V,transpose_b=True)
+    WH = tf.matmul(W,H,transpose_b=True)
     
-    rF = tf.multiply(tf.sub(tf.matmul(U,V,transpose_b=True),F),mask) 
-    f_norm = tf.nn.l2_loss(rF) 
-    f_norm_loss = f_norm + tf.add(tf.multiply(lambda0, tf.nn.l2_loss(U)), tf.multiply(lambda0, tf.nn.l2_loss(V)))
+    rF = tf.reduce_sum(tf.pow(tf.multiply(tf.subtract(UV,F),feature_mask),2))
+    f_norm_loss = rF + tf.add(tf.multiply(lambda0, tf.nn.l2_loss(U)), tf.multiply(lambda0, tf.nn.l2_loss(V)))
     #X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
     #reconstruction = theano.tensor.dot(U, V.T)
     #difference = X_symbolic - reconstruction
@@ -266,16 +268,24 @@ def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx
     #err = theano.tensor.sqr(masked_difference)
     #mse = err.mean()
     #xloss = mse + lambda0 * ((U * U).mean() + (V * V).mean())
-    rL = tf.matmul(W,H,transpose_b=True)
-    L_difference = tf.multiply((1.-alpha),tf.nn.l2_loss(tf.sub(L,rL)) + tf.multiply((2*alpha-1),tf.nn.l2_loss(tf.multiply(tf.sub(L,rL),labelmask)))
+    LWH = tf.subtract(L,WH)
+    L_difference = tf.reduce_sum(tf.multiply((1.-alpha),tf.pow(LWH,2))) + tf.reduce_sum(tf.multiply((2*alpha-1),tf.pow(tf.multiply(LWH,label_mask),2)))
     #positive_difference = theano.tensor.sqr((Y_symbolic - Y_reconstruction) * labelmask) * (2*alpha-1.)
     L_mse =  L_difference + tf.multiply(delta,L_difference) + tf.add(tf.multiply(lambda1, tf.nn.l2_loss(W)), tf.multiply(lambda1, tf.nn.l2_loss(H)))
-    global_loss = f_norm_loss + L_mse + tf.multiply(lambda2, tf.nn.l2_loss(tf.sub(U,W)))
-    optimizer = tf.train.AdagradOptimizer(learning_rate=0.001).minimize(global_loss)
+    global_loss = f_norm_loss + L_mse + tf.multiply(lambda2, tf.reduce_sum(tf.pow(tf.subtract(U,W),2)))
+    train_step = tf.train.AdagradOptimizer(learning_rate=0.001).minimize(global_loss)
     init_op = tf.initialize_all_variables()
-    sess = tf.Session()
-    sess.run(init_op)
-    sess.run([optimizer, global_loss], feed_dict={F: X, L: Y})
+    steps = 2000
+    with tf.Session() as sess:
+         sess.run(init_op)
+         for i in range(steps):
+             sess.run(train_step)
+             if i%100 == 0:
+                 print("\nCost: %f" % sess.run(global_loss))
+         learntU = sess.run(U)
+         learntV = sess.run(V)
+         learntW = sess.run(W)
+         learntH = sess.run(H)
     #### optimisation
     #downhill.minimize(
     #        loss=global_loss,
@@ -288,7 +298,7 @@ def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx
     #        learning_rate=0.1,
     #        min_improvement = 0.0001)
 
-    return U,V,W,H
+    return learntU,learntV,learntW,learntH
 
 #### generate data
 #### yeast: classes 14, data: 1500+917, dimensionality: 103
@@ -326,7 +336,7 @@ kx = 10
 alpha = (1. + 0.5)/2
 fea_fraction = 0.8
 label_fraction = 0.8
-lambda0 = 0.1. ### regularisation on U,V and H
+lambda0 = 0.1 ### regularisation on U,V and H
 delta = 0.1 ### penalty trade-off between reconstruction of feature matrix and reconstruction of label matrix 
 
 fea_mask = np.random.random(train_fea.shape)
@@ -338,7 +348,7 @@ W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda0,kx)
 pu_label = acc_label(train_label,W_pu,H_pu,label_loc)
 #completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)             
 lambda2 = 10.      
-U,V,W,H = completionPUV(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda0,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
+U,V,W,H = completionPUVTF(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda0,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
 algo_label = acc_label(train_label,W,H,label_loc)
 algo_error = acc_feature(train_fea,U,V,fea_loc)
 
@@ -389,3 +399,57 @@ import pickle
 with open('results_15.pickle','wb') as f:
     pickle.dump([gd_reconstruction_error_list,gd_auc_score_list,reconstruction_error_list,auc_score_list,parameters_setting],f)
 
+
+#### non-negative matirx factorization 
+import tensorflow as tf 
+import numpy as np 
+import pandas as pd
+
+np.random.seed(0)
+A_orig = np.array([[3, 4, 5, 2],
+                   [4, 4, 3, 3],
+                   [5, 5, 4, 4]], dtype=np.float32).T
+A_orig_df = pd.DataFrame(A_orig)
+
+A_df_masked = A_orig_df.copy()
+A_df_masked.iloc[0,0]=np.NAN
+np_mask = A_df_masked.notnull()
+
+tf_mask = tf.Variable(np_mask.values)
+A = tf.constant(A_df_masked.values)
+shape = A_df_masked.values.shape
+
+rank = 3 
+temp_H = np.random.randn(rank, shape[1]).astype(np.float32)
+temp_H = np.divide(temp_H, temp_H.max())
+
+temp_W = np.random.randn(shape[0], rank).astype(np.float32)
+temp_W = np.divide(temp_W, temp_W.max())
+
+H = tf.Variable(temp_H)
+W = tf.Variable(temp_W)
+WH = tf.matmul(W,H)
+
+### cost function
+cost = tf.reduce_sum(tf.pow(tf.boolean_mask(A,tf_mask) - tf.boolean_mask(WH,tf_mask),2))
+### learning rate 
+lr = 0.001
+steps = 1000
+train_step = tf.train.AdagradOptimizer(learning_rate=lr).minimize(cost)
+init = tf.global_variables_initializer()
+### Ensuring non-negativity 
+clip_W = W.assign(tf.maximum(tf.zeros_like(W),W))
+clip_H = H.assign(tf.maximum(tf.zeros_like(H),H))
+clip = tf.group(clip_W,clip_H)
+
+steps = 5000
+with tf.Session() as sess:
+    sess.run(init)
+    for i in range(steps):
+        sess.run(train_step)
+        sess.run(clip) ## enforcing non-negativity 
+        if i%100 == 0:
+            print("\ncost: %f\n" % sess.run(cost))
+    learnt_W = sess.run(W)
+    learnt_H = sess.run(H)
+    
