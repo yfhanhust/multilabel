@@ -97,15 +97,17 @@ def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
     V = theano.shared(np.random.random((X.shape[1],kx)),name='V')
     W = theano.shared(np.random.random((Y.shape[0],kx)),name='W')
     H = theano.shared(np.random.random((Y.shape[1],kx)),name='H')
-    feature_mask = theano.shared(mask,name='mask')
-    label_mask = theano.shared(labelmask,name='labelmask')
+    feature_mask = theano.tensor.matrix('feature_mask')
+    label_mask = theano.tensor.matrix('label_mask')
+    #feature_mask = theano.shared(mask,name='mask')
+    #label_mask = theano.shared(labelmask,name='labelmask')
     #### U,V,W and H randomly initialised 
     
     nsample = X.shape[0]
     #X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
     #tX = theano.shared(X.astype(theano.config.floatX),name="X")
     #tX = theano.shared(X,name="X")
-    tX = theano.tensor.matrix('X')
+    tX = theano.tensor.matrix('X') ### symbolic variable 
     difference = tX - theano.tensor.dot(U, V.T)
     masked_difference = difference * feature_mask
     err = theano.tensor.sqr(masked_difference)
@@ -114,7 +116,7 @@ def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
 
     #tY = theano.shared(Y.astype(theano.config.floatX),name="Y")
     #tY = theano.shared(Y,name="Y")
-    tY = theano.tensor.matrix('Y')
+    tY = theano.tensor.matrix('Y') ### symbolic variable 
     Y_reconstruction = theano.tensor.dot(W, H.T)
     Ydifference = theano.tensor.sqr((tY - Y_reconstruction)) * (1 - alpha)
     positive_difference = theano.tensor.sqr((tY - Y_reconstruction) * label_mask) * (2*alpha-1.)
@@ -125,15 +127,15 @@ def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
     downhill.minimize(
             loss= global_loss,
             params = [U,V,W,H],
-            train = [X,Y],
-            inputs = [tX,tY],
+            train = [X,Y,mask,labelmask],
+            inputs = [tX,tY,feature_mask,label_mask],
             patience=0,
             algo='rmsprop',
             batch_size=nsample,
             max_gradient_norm=1,
             learning_rate=0.1,
             min_improvement = 0.0001)
-
+    
     return U.get_value(),V.get_value(),W.get_value(),H.get_value()
 
 def completionPUV1(X,Y,fea_loc,label_loc,alpha,lambda0,delta,kx):
