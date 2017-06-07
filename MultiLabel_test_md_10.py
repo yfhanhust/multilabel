@@ -97,7 +97,7 @@ def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
     V = theano.shared(np.random.random((X.shape[1],kx)),name='V')
     W = theano.shared(np.random.random((Y.shape[0],kx)),name='W')
     H = theano.shared(np.random.random((Y.shape[1],kx)),name='H')
-
+    nsample = X.shape[0]
     X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
     reconstruction = theano.tensor.dot(U, V.T)
     difference = X_symbolic - reconstruction
@@ -113,7 +113,6 @@ def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
     Ymse = Ydifference.mean() + positive_difference.mean()
     global_loss = xloss + delta * Ymse + lambda1 * ((W * W).mean() + (H * H).mean()) + lambda2 * theano.tensor.sqr((U-W)).mean()
 
-
     #### optimisation
     downhill.minimize(
             loss=global_loss,
@@ -121,7 +120,7 @@ def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
             inputs = [X_symbolic,Y_symbolic],
             patience=0,
             algo='rmsprop',
-            batch_size=Y.shape[0],
+            batch_size=nsample,
             max_gradient_norm=1,
             learning_rate=0.1,
             min_improvement = 0.0001)
@@ -232,7 +231,6 @@ def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx
 
     #delta = 0.3
     ### masking out some entries from feature and label matrix
-
     mask = np.ones(X.shape)
     mask[fea_loc] = 0.
     labelmask = np.ones(Y.shape)
@@ -246,10 +244,10 @@ def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx
     L = tf.Variable(Y,dtype=tf.float32)
     
     #### tensorflow variable 
-    U = tf.Variable(tf.zeros([X.shape[0],kx]),dtype=tf.float32)
-    V = tf.Variable(tf.zeros([X.shape[1],kx]),dtype=tf.float32)
-    W = tf.Variable(tf.zeros([Y.shape[0],kx]),dtype=tf.float32)
-    H = tf.Variable(tf.zeros([Y.shape[1],kx]),dtype=tf.float32)
+    U = tf.Variable(np.random.randn(X.shape[0],kx),dtype=tf.float32)
+    V = tf.Variable(np.random.randn(X.shape[1],kx),dtype=tf.float32)
+    W = tf.Variable(np.random.randn(Y.shape[0],kx),dtype=tf.float32)
+    H = tf.Variable(np.random.randn(Y.shape[1],kx),dtype=tf.float32)
     #### Theano and downhill
     #U = theano.shared(np.random.random((X.shape[0],kx)),name='U')
     #V = theano.shared(np.random.random((X.shape[1],kx)),name='V')
@@ -260,7 +258,7 @@ def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx
     WH = tf.matmul(W,H,transpose_b=True)
     
     rF = tf.reduce_sum(tf.pow(tf.multiply(tf.subtract(UV,F),feature_mask),2))
-    f_norm_loss = rF + tf.add(tf.multiply(lambda0, tf.nn.l2_loss(U)), tf.multiply(lambda0, tf.nn.l2_loss(V)))
+    f_norm_loss = rF + tf.add(tf.multiply(lambda0, tf.reduce_sum(tf.pow(U,2))), tf.multiply(lambda0, tf.reduce_sum(tf.pow(V,2))))
     #X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
     #reconstruction = theano.tensor.dot(U, V.T)
     #difference = X_symbolic - reconstruction
@@ -271,9 +269,9 @@ def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx
     LWH = tf.subtract(L,WH)
     L_difference = tf.reduce_sum(tf.multiply((1.-alpha),tf.pow(LWH,2))) + tf.reduce_sum(tf.multiply((2*alpha-1),tf.pow(tf.multiply(LWH,label_mask),2)))
     #positive_difference = theano.tensor.sqr((Y_symbolic - Y_reconstruction) * labelmask) * (2*alpha-1.)
-    L_mse =  L_difference + tf.multiply(delta,L_difference) + tf.add(tf.multiply(lambda1, tf.nn.l2_loss(W)), tf.multiply(lambda1, tf.nn.l2_loss(H)))
+    L_mse =  L_difference + tf.multiply(delta,L_difference) + tf.add(tf.multiply(lambda1, tf.reduce_sum(tf.pow(W,2))), tf.multiply(lambda1, tf.reduce_sum(tf.pow(H,2))))
     global_loss = f_norm_loss + L_mse + tf.multiply(lambda2, tf.reduce_sum(tf.pow(tf.subtract(U,W),2)))
-    train_step = tf.train.AdagradOptimizer(learning_rate=0.001).minimize(global_loss)
+    train_step = tf.train.AdagradOptimizer(learning_rate=0.1).minimize(global_loss)
     init_op = tf.initialize_all_variables()
     steps = 2000
     with tf.Session() as sess:
@@ -401,55 +399,55 @@ with open('results_15.pickle','wb') as f:
 
 
 #### non-negative matirx factorization 
-import tensorflow as tf 
-import numpy as np 
-import pandas as pd
+#import tensorflow as tf 
+#import numpy as np 
+#import pandas as pd
 
-np.random.seed(0)
-A_orig = np.array([[3, 4, 5, 2],
-                   [4, 4, 3, 3],
-                   [5, 5, 4, 4]], dtype=np.float32).T
-A_orig_df = pd.DataFrame(A_orig)
+#np.random.seed(0)
+#A_orig = np.array([[3, 4, 5, 2],
+#                   [4, 4, 3, 3],
+#                   [5, 5, 4, 4]], dtype=np.float32).T
+#A_orig_df = pd.DataFrame(A_orig)
 
-A_df_masked = A_orig_df.copy()
-A_df_masked.iloc[0,0]=np.NAN
-np_mask = A_df_masked.notnull()
+#A_df_masked = A_orig_df.copy()
+#A_df_masked.iloc[0,0]=np.NAN
+#np_mask = A_df_masked.notnull()
 
-tf_mask = tf.Variable(np_mask.values)
-A = tf.constant(A_df_masked.values)
-shape = A_df_masked.values.shape
+#tf_mask = tf.Variable(np_mask.values)
+#A = tf.constant(A_df_masked.values)
+#shape = A_df_masked.values.shape
 
-rank = 3 
-temp_H = np.random.randn(rank, shape[1]).astype(np.float32)
-temp_H = np.divide(temp_H, temp_H.max())
+#rank = 3 
+#temp_H = np.random.randn(rank, shape[1]).astype(np.float32)
+#temp_H = np.divide(temp_H, temp_H.max())
 
-temp_W = np.random.randn(shape[0], rank).astype(np.float32)
-temp_W = np.divide(temp_W, temp_W.max())
+#temp_W = np.random.randn(shape[0], rank).astype(np.float32)
+#temp_W = np.divide(temp_W, temp_W.max())
 
-H = tf.Variable(temp_H)
-W = tf.Variable(temp_W)
-WH = tf.matmul(W,H)
+#H = tf.Variable(temp_H)
+#W = tf.Variable(temp_W)
+#WH = tf.matmul(W,H)
 
 ### cost function
-cost = tf.reduce_sum(tf.pow(tf.boolean_mask(A,tf_mask) - tf.boolean_mask(WH,tf_mask),2))
+#cost = tf.reduce_sum(tf.pow(tf.boolean_mask(A,tf_mask) - tf.boolean_mask(WH,tf_mask),2))
 ### learning rate 
-lr = 0.001
-steps = 1000
-train_step = tf.train.AdagradOptimizer(learning_rate=lr).minimize(cost)
-init = tf.global_variables_initializer()
+#lr = 0.001
+#steps = 1000
+#train_step = tf.train.AdagradOptimizer(learning_rate=lr).minimize(cost)
+#init = tf.global_variables_initializer()
 ### Ensuring non-negativity 
-clip_W = W.assign(tf.maximum(tf.zeros_like(W),W))
-clip_H = H.assign(tf.maximum(tf.zeros_like(H),H))
-clip = tf.group(clip_W,clip_H)
+#clip_W = W.assign(tf.maximum(tf.zeros_like(W),W))
+#clip_H = H.assign(tf.maximum(tf.zeros_like(H),H))
+#clip = tf.group(clip_W,clip_H)
 
-steps = 5000
-with tf.Session() as sess:
-    sess.run(init)
-    for i in range(steps):
-        sess.run(train_step)
-        sess.run(clip) ## enforcing non-negativity 
-        if i%100 == 0:
-            print("\ncost: %f\n" % sess.run(cost))
-    learnt_W = sess.run(W)
-    learnt_H = sess.run(H)
+#steps = 5000
+#with tf.Session() as sess:
+#    sess.run(init)
+#    for i in range(steps):
+#        sess.run(train_step)
+#        sess.run(clip) ## enforcing non-negativity 
+#        if i%100 == 0:
+#            print("\ncost: %f\n" % sess.run(cost))
+#    learnt_W = sess.run(W)
+#    learnt_H = sess.run(H)
     
