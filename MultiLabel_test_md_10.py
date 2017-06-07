@@ -97,27 +97,36 @@ def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
     V = theano.shared(np.random.random((X.shape[1],kx)),name='V')
     W = theano.shared(np.random.random((Y.shape[0],kx)),name='W')
     H = theano.shared(np.random.random((Y.shape[1],kx)),name='H')
+    feature_mask = theano.shared(mask,name='mask')
+    label_mask = theano.shared(labelmask,name='labelmask')
+    #### U,V,W and H randomly initialised 
+    
     nsample = X.shape[0]
-    X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
-    reconstruction = theano.tensor.dot(U, V.T)
-    difference = X_symbolic - reconstruction
-    masked_difference = difference * mask
+    #X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
+    #tX = theano.shared(X.astype(theano.config.floatX),name="X")
+    #tX = theano.shared(X,name="X")
+    tX = theano.tensor.matrix('X')
+    difference = tX - theano.tensor.dot(U, V.T)
+    masked_difference = difference * feature_mask
     err = theano.tensor.sqr(masked_difference)
     mse = err.mean()
     xloss = mse + lambda0 * ((U * U).mean() + (V * V).mean())
 
-    Y_symbolic = theano.tensor.matrix(name="Y", dtype=Y.dtype)
+    #tY = theano.shared(Y.astype(theano.config.floatX),name="Y")
+    #tY = theano.shared(Y,name="Y")
+    tY = theano.tensor.matrix('Y')
     Y_reconstruction = theano.tensor.dot(W, H.T)
-    Ydifference = theano.tensor.sqr((Y_symbolic - Y_reconstruction)) * (1 - alpha)
-    positive_difference = theano.tensor.sqr((Y_symbolic - Y_reconstruction) * labelmask) * (2*alpha-1.)
+    Ydifference = theano.tensor.sqr((tY - Y_reconstruction)) * (1 - alpha)
+    positive_difference = theano.tensor.sqr((tY - Y_reconstruction) * label_mask) * (2*alpha-1.)
     Ymse = Ydifference.mean() + positive_difference.mean()
     global_loss = xloss + delta * Ymse + lambda1 * ((W * W).mean() + (H * H).mean()) + lambda2 * theano.tensor.sqr((U-W)).mean()
 
     #### optimisation
     downhill.minimize(
-            loss=global_loss,
+            loss= global_loss,
+            params = [U,V,W,H],
             train = [X,Y],
-            inputs = [X_symbolic,Y_symbolic],
+            inputs = [tX,tY],
             patience=0,
             algo='rmsprop',
             batch_size=nsample,
@@ -227,7 +236,7 @@ def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,lambda0,kx):
     return U.get_value(),V.get_value()
     
 
-def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
+def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx,steps):
 
     #delta = 0.3
     ### masking out some entries from feature and label matrix
@@ -273,7 +282,7 @@ def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx
     global_loss = f_norm_loss + L_mse + tf.multiply(lambda2, tf.reduce_sum(tf.pow(tf.subtract(U,W),2)))
     train_step = tf.train.AdagradOptimizer(learning_rate=0.1).minimize(global_loss)
     init_op = tf.initialize_all_variables()
-    steps = 2000
+    #steps = 5000
     with tf.Session() as sess:
          sess.run(init_op)
          for i in range(steps):
@@ -346,7 +355,9 @@ W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda0,kx)
 pu_label = acc_label(train_label,W_pu,H_pu,label_loc)
 #completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)             
 lambda2 = 10.      
-U,V,W,H = completionPUVTF(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda0,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
+steps = 5000
+U,V,W,H = completionPUV(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda0,lambda2,delta,kx)
+#U,V,W,H = completionPUVTF(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda0,lambda2,delta,kx,steps) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
 algo_label = acc_label(train_label,W,H,label_loc)
 algo_error = acc_feature(train_fea,U,V,fea_loc)
 
