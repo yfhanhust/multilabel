@@ -268,8 +268,15 @@ def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx
     UV = tf.matmul(U,V,transpose_b=True)
     WH = tf.matmul(W,H,transpose_b=True)
     
-    rF = tf.reduce_sum(tf.pow(tf.multiply(tf.subtract(UV,F),feature_mask),2))
-    f_norm_loss = rF + tf.add(tf.multiply(lambda0, tf.reduce_sum(tf.pow(U,2))), tf.multiply(lambda0, tf.reduce_sum(tf.pow(V,2))))
+    factorX = float(X.shape[0] * X.shape[1])
+    factorU = float(X.shape[0] * kx)
+    factorV = float(X.shape[1] * kx)
+    factorW = float(Y.shape[0] * kx)
+    factorH = float(Y.shape[1] * kx)
+    factorY = float(Y.shape[0] * Y.shape[1])
+    
+    rF = tf.multiply((1./factorX),tf.reduce_sum(tf.pow(tf.multiply(tf.subtract(UV,F),feature_mask),2)))
+    f_norm_loss = rF + tf.add(tf.multiply(lambda0 * 1./factorU, tf.reduce_sum(tf.pow(U,2))), tf.multiply(lambda0 * 1./factorV, tf.reduce_sum(tf.pow(V,2))))
     #X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
     #reconstruction = theano.tensor.dot(U, V.T)
     #difference = X_symbolic - reconstruction
@@ -278,10 +285,10 @@ def completionPUVTF(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx
     #mse = err.mean()
     #xloss = mse + lambda0 * ((U * U).mean() + (V * V).mean())
     LWH = tf.subtract(L,WH)
-    L_difference = tf.reduce_sum(tf.multiply((1.-alpha),tf.pow(LWH,2))) + tf.reduce_sum(tf.multiply((2*alpha-1),tf.pow(tf.multiply(LWH,label_mask),2)))
+    L_difference = tf.multiply((1./factorY),(tf.reduce_sum(tf.multiply((1.-alpha),tf.pow(LWH,2))) + tf.reduce_sum(tf.multiply((2*alpha-1),tf.pow(tf.multiply(LWH,label_mask),2)))))
     #positive_difference = theano.tensor.sqr((Y_symbolic - Y_reconstruction) * labelmask) * (2*alpha-1.)
-    L_mse =  L_difference + tf.multiply(delta,L_difference) + tf.add(tf.multiply(lambda1, tf.reduce_sum(tf.pow(W,2))), tf.multiply(lambda1, tf.reduce_sum(tf.pow(H,2))))
-    global_loss = f_norm_loss + L_mse + tf.multiply(lambda2, tf.reduce_sum(tf.pow(tf.subtract(U,W),2)))
+    L_mse =  L_difference + tf.multiply(delta,L_difference) + tf.add(tf.multiply(lambda1 * (1./factorW), tf.reduce_sum(tf.pow(W,2))), tf.multiply(lambda1 * (1./factorH), tf.reduce_sum(tf.pow(H,2))))
+    global_loss = f_norm_loss + L_mse + tf.multiply(lambda2 * (1./factorU), tf.reduce_sum(tf.pow(tf.subtract(U,W),2)))
     train_step = tf.train.AdagradOptimizer(learning_rate=0.1).minimize(global_loss)
     init_op = tf.initialize_all_variables()
     #steps = 5000
@@ -345,35 +352,35 @@ kx = 10
 alpha = (1. + 0.5)/2
 fea_fraction = 0.8
 label_fraction = 0.8
-lambda0 = 0.1 ### regularisation on U,V and H
-delta = 0.1 ### penalty trade-off between reconstruction of feature matrix and reconstruction of label matrix 
+#lambda0 = 0.1 ### regularisation on U,V and H
+#delta = 0.1 ### penalty trade-off between reconstruction of feature matrix and reconstruction of label matrix 
 
-fea_mask = np.random.random(train_fea.shape)
-fea_loc = np.where(fea_mask < fea_fraction)
-random_mat = np.random.random(train_label.shape)
-label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
+#fea_mask = np.random.random(train_fea.shape)
+#fea_loc = np.where(fea_mask < fea_fraction)
+#random_mat = np.random.random(train_label.shape)
+#label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
 
-W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda0,kx)
-pu_label = acc_label(train_label,W_pu,H_pu,label_loc)
+#W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda0,kx)
+#pu_label = acc_label(train_label,W_pu,H_pu,label_loc)
 #completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)             
-lambda2 = 10.      
-steps = 5000
-U,V,W,H = completionPUV(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda0,lambda2,delta,kx)
+#lambda2 = 10.      
+#steps = 10000
+#U,V,W,H = completionPUV(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda0,lambda2,delta,kx)
 #U,V,W,H = completionPUVTF(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda0,lambda2,delta,kx,steps) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
-algo_label = acc_label(train_label,W,H,label_loc)
-algo_error = acc_feature(train_fea,U,V,fea_loc)
+#algo_label = acc_label(train_label,W,H,label_loc)
+#algo_error = acc_feature(train_fea,U,V,fea_loc)
 
 #U,V,H = completionPUV1(train_fea,train_fea,fea_loc,label_loc,alpha,lambda0,delta,kx)
 #algo_label = acc_label(train_label,U,H,label_loc)
 #algo_error = acc_feature(train_fea,U,V,fea_loc)
 
-U_lr, V_lr = completionLR(train_fea,kx,fea_loc,lambda0,lambda0)
-lr_error = acc_feature(train_fea,U_lr,V_lr,fea_loc)
+#U_lr, V_lr = completionLR(train_fea,kx,fea_loc,lambda0,lambda0)
+#lr_error = acc_feature(train_fea,U_lr,V_lr,fea_loc)
 
-print 'baseline classification AUC: ' + str(pu_label)
-print 'the proposed method AUC: ' + str(algo_label)
-print 'baseline reconstruction error: ' + str(lr_error)
-print 'the proposed method reconstruction error: ' + str(algo_error)
+#print 'baseline classification AUC: ' + str(pu_label)
+#print 'the proposed method AUC: ' + str(algo_label)
+#print 'baseline reconstruction error: ' + str(lr_error)
+#print 'the proposed method reconstruction error: ' + str(algo_error)
 ###### for debug
 
 for lambda0 in [10,1,0.1,0.01]:
@@ -388,7 +395,7 @@ for lambda0 in [10,1,0.1,0.01]:
                     W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda1,kx)
                     auc_score = acc_label(train_label,W_pu,H_pu,label_loc)
                     gd_auc_score_list.append(auc_score)
-                    U,V,W,H = completionPUVVersion1(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
+                    U,V,W,H = completionPUV(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx) #(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx)
                     auc_score = acc_label(train_label,W,H,label_loc)
                     reconstruction_error = acc_feature(train_fea,U,V,fea_loc)
                     auc_score_list.append(auc_score)
