@@ -1,0 +1,304 @@
+import numpy as np 
+import scipy as sp 
+from sklearn.linear_model import Ridge 
+import downhill
+import theano
+from sklearn.metrics import roc_auc_score
+
+def completionLR(X,kx,fea_loc,lambdaU):
+    mask = np.ones(X.shape)
+    mask[fea_loc] = 0.
+
+    #### Theano and downhill
+    U = theano.shared(np.random.random((X.shape[0],kx)),name='U')
+    V = theano.shared(np.random.random((X.shape[1],kx)),name='V')
+
+    X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
+    reconstruction = theano.tensor.dot(U, V.T)
+    difference = X_symbolic - reconstruction
+    masked_difference = difference * mask
+    err = theano.tensor.sqr(masked_difference)
+    mse = err.mean()
+    xloss = mse + lambdaU/2. * (U * U).mean() + lambdaU/2. * (V * V).mean()
+
+    #### optimisation
+    downhill.minimize(
+            loss= xloss,
+            train = [X],
+            patience=0,
+            algo='rmsprop',
+            batch_size=X.shape[0],
+            max_gradient_norm=1,
+            learning_rate=0.1,
+            min_improvement = 0.0005)
+
+    return U.get_value(),V.get_value()
+    
+    
+def baselinePU(Y,label_loc,alpha,vlambda,kx):
+
+    #random_mat = np.random.random(Y.shape)
+    #label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
+    #### print statistics
+    #print np.where(Y[label_loc] > 0)[0].shape[0] / float(np.where(Y > 0)[0].shape[0]) ## the ratio of "1" entries being masked
+    #print np.where(Y[label_loc] < 1)[0].shape[0] / float(np.where(Y < 1)[0].shape[0]) ## the ratio of "0" entries being masked
+    W = theano.shared(np.random.random((Y.shape[0],kx)),name='W')
+    H = theano.shared(np.random.random((Y.shape[1],kx)),name='H')
+
+    labelmask = np.ones(Y.shape)
+    labelmask[label_loc] = 0
+    Y_masked = Y.copy()
+    Y_masked[label_loc] = 0
+
+    reconstruction = theano.tensor.dot(W, H.T)
+    X_symbolic = theano.tensor.matrix(name="Y_masked", dtype=Y_masked.dtype)
+    difference = theano.tensor.sqr((X_symbolic - reconstruction)) * (1 - alpha)
+    positive_difference = theano.tensor.sqr((X_symbolic - reconstruction) * labelmask) * (2*alpha-1.)
+
+    mse = difference.mean() + positive_difference.mean()
+    loss = mse + (vlambda/2.) * (W * W).mean() + (vlambda/2.) * (H * H).mean()
+
+    downhill.minimize(
+            loss=loss,
+            train=[Y_masked],
+            patience=0,
+            algo='rmsprop',
+            batch_size=Y_masked.shape[0],
+            max_gradient_norm=1,
+            learning_rate=0.06,
+            min_improvement = 0.001)
+
+    return W.get_value(),H.get_value()
+
+
+def solve_UV(X,W,fea_loc,lambda0,lambda_diff,kx):
+
+    #delta = 0.3
+    ### masking out some entries from feature and label matrix
+    mask = np.ones(X.shape)
+    mask[fea_loc] = 0.
+    
+    #### Theano and downhill
+    #### declare variables shared between symbolic and non-symbolic computing thread
+    U = theano.shared(np.random.random((X.shape[0],kx)),name='U')
+    V = theano.shared(np.random.random((X.shape[1],kx)),name='V')
+    #### declare symbolic variables 
+    feature_mask = theano.tensor.matrix('feature_mask')
+    #feature_mask = theano.shared(mask,name='mask')
+    #label_mask = theano.shared(labelmask,name='labelmask')
+    #### U,V,W and H randomly initialised     
+    nsample = X.shape[0]
+    #X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
+    #tX = theano.shared(X.astype(theano.config.floatX),name="X")
+    #tX = theano.shared(X,name="X")
+    tX = theano.tensor.matrix('X') ### symbolic variable
+    tW = theano.tensor.matrix('W') ### symbolic variable  
+    difference = tX - theano.tensor.dot(U, V.T)
+    masked_difference = difference * feature_mask
+    err = theano.tensor.sqr(masked_difference)
+    mse = err.mean()
+    xloss = mse + (lambda0/2.) * ((U * U).mean() + (V * V).mean()) + lambda_diff * theano.tensor.sqr((U - tW)).mean() 
+
+    #### optimisation
+    downhill.minimize(
+            loss= xloss,
+            params = [U,V],
+            train = [X,W,mask],
+            inputs = [tX,tW,feature_mask],
+            patience=0,
+            algo='rmsprop',
+            batch_size=nsample,
+            max_gradient_norm=1,
+            learning_rate=0.1,
+            min_improvement = 0.0005)
+    
+    return U.get_value(),V.get_value()
+
+
+def solve_WH(Y,U,label_loc,alpha,delta,lambda1,lambda_diff,kx):
+
+    #delta = 0.3
+    ### masking out some entries from feature and label matrix
+    labelmask = np.ones(Y.shape)
+    labelmask[label_loc] = 0
+    nsample = Y.shape[0]
+    ndim  = Y.shape[1]
+    #### Theano and downhill
+    #### declare variables shared between symbolic and non-symbolic computing thread
+    W = theano.shared(np.random.random((nsample,kx)),name='W')
+    H = theano.shared(np.random.random((ndim,kx)),name='H')
+    #### declare symbolic variables 
+    label_mask = theano.tensor.matrix('label_mask')
+    #feature_mask = theano.shared(mask,name='mask')
+    #label_mask = theano.shared(labelmask,name='labelmask')
+    #### U,V,W and H randomly initialised     
+    #X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
+    #tX = theano.shared(X.astype(theano.config.floatX),name="X")
+    #tX = theano.shared(X,name="X")
+    tY = theano.tensor.matrix('Y') ### symbolic variable
+    tU = theano.tensor.matrix('U') ### symbolic variable   
+    Y_reconstruction = theano.tensor.dot(W, H.T)
+    Ydifference = theano.tensor.sqr((tY - Y_reconstruction)) * (1 - alpha)
+    positive_difference = theano.tensor.sqr((tY - Y_reconstruction) * label_mask) * (2*alpha-1.)
+    Ymse = Ydifference.mean() + positive_difference.mean()
+    global_loss = delta * Ymse + (lambda1/2.) * ((W * W).mean() + (H * H).mean()) + lambda_diff * theano.tensor.sqr((tU-W)).mean()
+
+    #### optimisation
+    downhill.minimize(
+            loss= global_loss,
+            params = [W,H],
+            train = [Y,U,labelmask],
+            inputs = [tY,tU,label_mask],
+            patience=0,
+            algo='rmsprop',
+            batch_size=nsample,
+            max_gradient_norm=1,
+            learning_rate=0.1,
+            min_improvement = 0.0005)
+    
+    return W.get_value(),H.get_value()
+
+
+def completionPUV(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx):
+
+    #delta = 0.3
+    ### masking out some entries from feature and label matrix
+
+    mask = np.ones(X.shape)
+    mask[fea_loc] = 0.
+    labelmask = np.ones(Y.shape)
+    labelmask[label_loc] = 0
+
+    #### Theano and downhill
+    #### declare variables shared between symbolic and non-symbolic computing thread
+    U = theano.shared(np.random.random((X.shape[0],kx)),name='U')
+    V = theano.shared(np.random.random((X.shape[1],kx)),name='V')
+    W = theano.shared(np.random.random((Y.shape[0],kx)),name='W')
+    H = theano.shared(np.random.random((Y.shape[1],kx)),name='H')
+    #### declare symbolic variables 
+    feature_mask = theano.tensor.matrix('feature_mask')
+    label_mask = theano.tensor.matrix('label_mask')
+    #feature_mask = theano.shared(mask,name='mask')
+    #label_mask = theano.shared(labelmask,name='labelmask')
+    #### U,V,W and H randomly initialised 
+    
+    nsample = X.shape[0]
+    #X_symbolic = theano.tensor.matrix(name="X", dtype=X.dtype)
+    #tX = theano.shared(X.astype(theano.config.floatX),name="X")
+    #tX = theano.shared(X,name="X")
+    tX = theano.tensor.matrix('X') ### symbolic variable 
+    difference = tX - theano.tensor.dot(U, V.T)
+    masked_difference = difference * feature_mask
+    err = theano.tensor.sqr(masked_difference)
+    mse = err.mean()
+    xloss = mse + lambda0 * ((U * U).mean() + (V * V).mean())
+
+    #tY = theano.shared(Y.astype(theano.config.floatX),name="Y")
+    #tY = theano.shared(Y,name="Y")
+    tY = theano.tensor.matrix('Y') ### symbolic variable 
+    Y_reconstruction = theano.tensor.dot(W, H.T)
+    Ydifference = theano.tensor.sqr((tY - Y_reconstruction)) * (1 - alpha)
+    positive_difference = theano.tensor.sqr((tY - Y_reconstruction) * label_mask) * (2*alpha-1.)
+    Ymse = Ydifference.mean() + positive_difference.mean()
+    global_loss = xloss + delta * Ymse + lambda1 * ((W * W).mean() + (H * H).mean()) + lambda2 * theano.tensor.sqr((U-W)).mean()
+
+    #### optimisation
+    downhill.minimize(
+            loss= global_loss,
+            params = [U,V,W,H],
+            train = [X,Y,mask,labelmask],
+            inputs = [tX,tY,feature_mask,label_mask],
+            patience=0,
+            algo='rmsprop',
+            batch_size=nsample,
+            max_gradient_norm=1,
+            learning_rate=0.1,
+            min_improvement = 0.0005)
+    
+    return U.get_value(),V.get_value(),W.get_value(),H.get_value()
+    
+def acc_label(Y,W,H,label_loc):
+    Y_reconstructed = np.dot(W,H.T)
+    ground_truth = Y[label_loc].tolist()
+    reconstruction = Y_reconstructed[label_loc].tolist()
+    auc_score = roc_auc_score(np.array(ground_truth),np.array(reconstruction))
+    return auc_score
+
+def acc_feature(X,U,V,fea_loc):
+    X_reconstruction = U.dot(V.T)
+    return np.linalg.norm(X[fea_loc] - X_reconstruction[fea_loc])    
+### Fast randomized SingularValue Thresholding for Low-rank Optimization
+#### generate data
+#### yeast: classes 14, data: 1500+917, dimensionality: 103
+train_file = open('Mediamill_data.txt','r')
+train_file_lines = train_file.readlines(100000000000000000)
+train_file.close()
+train_fea = np.zeros((43907,120),dtype=float)
+train_label = np.zeros((43907,101),dtype=int)
+for k in range(1,len(train_file_lines)):
+    data_segs = train_file_lines[k].split(' ')
+    label_line = data_segs[0]
+    labels = label_line.split(',')
+    if (len(labels) == 0) or (labels[0] == ''):
+        train_label[k-1,0] = 0
+    else:
+        for i in range(len(labels)):
+            train_label[k-1,int(labels[i])-1] = 1
+
+    for i in range(1,len(data_segs)):
+        fea_pair = data_segs[i].split(':')
+        fea_idx = int(fea_pair[0])
+        fea_val = float(fea_pair[1])
+        train_fea[k-1,fea_idx] = fea_val
+
+
+
+### test
+gd_reconstruction_error_list = []
+gd_auc_score_list = []
+reconstruction_error_list = []
+auc_score_list = []
+
+###### for debug
+kx = 5
+alpha = (1. + 0.5)/2 ### insensitive parameter in PU matrix completion
+lambda0 = 0.5 ### regularisation on U and V
+lambda1 = 0.5 ### regularisation on W and H
+lambda2 = 0.1 ### regularisation on consistency between U and W
+delta = 0.5 ### penalty trade-off between reconstruction of feature matrix and reconstruction of label matrix 
+
+fea_fraction = 0.8
+label_fraction = 0.8
+
+#lambda0 = 0.1 ### regularisation on U,V and H
+#delta = 0.1 ### penalty trade-off between reconstruction of feature matrix and reconstruction of label matrix 
+
+fea_mask = np.random.random(train_fea.shape)
+fea_loc = np.where(fea_mask < fea_fraction)
+random_mat = np.random.random(train_label.shape)
+label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
+
+#### initialisation
+W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda1,kx)
+U_lr, V_lr = completionLR(train_fea,kx,fea_loc,lambda0)
+
+#### iterative solution
+#### given W, solve U and V
+U,V = solve_UV(train_fea,W_pu,fea_loc,lambda0,lambda2,kx)
+#### given U, solve W and H
+W,H = solve_WH(train_label,U_lr,label_loc,alpha,delta,lambda1,lambda2,kx)
+
+##### Alternative Optimization 
+for i in range(10):
+    #U_pres = U.copy()
+    #W_pres = W.copy()
+    #### given W, solve U and V
+    U,V = solve_UV(train_fea,W,fea_loc,lambda0,lambda2,kx)
+    #### given U, solve W and H
+    W,H = solve_WH(train_label,U,label_loc,alpha,delta,lambda1,lambda2,kx)
+
+#U,V,W,H = completionPUV(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda0,lambda2,delta,kx)
+algo_label = acc_label(train_label,W,H,label_loc)
+algo_error = acc_feature(train_fea,U,V,fea_loc)
+lr_error = acc_feature(train_fea,U_lr,V_lr,fea_loc)
+pu_label = acc_label(train_label,W_pu,H_pu,label_loc)
