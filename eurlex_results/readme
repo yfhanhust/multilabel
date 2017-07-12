@@ -1,0 +1,5 @@
+pickle_eurlex0.dat:lambda0=10,lambda1=10
+pickle_eurlex1.dat:lambda0=1,lambda1=10
+pickle_eurlex2.dat:lambda0=10,lambda1=1
+pickle_eurlex3.dat:lambda0=10,lambda1=0.1
+pickle_eurlex6.dat:lambda0=1,lambda1=0.1
