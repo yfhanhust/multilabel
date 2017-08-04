@@ -380,8 +380,37 @@ pu_label = acc_label(train_label,W_pu,H_pu,label_loc)
 opt_error = acc_feature1(train_fea,A_opt1,U_opt1,V_opt1,fea_loc)
 opt_label = acc_label1(train_label,A_opt1,W_opt1,H_opt1,label_loc)
 '''
+'''
+kx = 8
+kd = 300
+alpha = (1. + 0.5)/2
+lambda2 = 100
+lambda0 = 0.8
+lambda1 = 0.5
+delta = 1
+fea_fraction = 0.6
+label_fraction = 0.8
 
+fea_mask = np.random.random(train_fea.shape)
+fea_loc = np.where(fea_mask < fea_fraction)
+random_mat = np.random.random(train_label.shape)
+label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
 
+#### baseline
+W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda1,kx)
+U_lr, V_lr = completionLR(train_fea,kx,fea_loc,lambda0)
+#### comparison
+U_opt1,V_opt1,W_opt1,H_opt1,A_opt1 = completionPUV1(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx,kd)
+#### evaluation metrics 
+lr_error = acc_feature(train_fea,U_lr,V_lr,fea_loc)
+pu_label = acc_label(train_label,W_pu,H_pu,label_loc)
+opt_error = acc_feature1(train_fea,A_opt1,U_opt1,V_opt1,fea_loc)
+opt_label = acc_label1(train_label,A_opt1,W_opt1,H_opt1,label_loc)
+print lr_error
+print pu_label
+print opt_error
+print opt_label
+'''
 ### test
 gd_reconstruction_error_list = []
 gd_auc_score_list = []
@@ -390,50 +419,50 @@ auc_score_list = []
 parameter_list = []
 ###### for debug
 ###### fixed parameter 
-kx = 3
+#kx = 8
 kd = 300 
 alpha = (1. + 0.5)/2 ### insensitive parameter in PU matrix completion
-delta = 5.
 lambda2 = 100. ### regularisation on A 
-fixed_parameter = [kx,kd,alpha,delta,lambda2]
-for lambda0 in [0.01,0.05,0.1,0.5]: ### 3 
-    for lambda1 in [0.01,0.05,0.1,0.5]: ### 3
-        for delta in [1,5,10]: ### 3
-            gd_reconstruction_one_round = []
-            gd_acc_one_round = []
-            reconstruction_one_round = []
-            acc_one_round = []
-            parameter_list.append([lambda0,lambda1,delta])
-            for iround in range(10): ### 10 
-                fea_fraction = 0.6
-                label_fraction = 0.8
-                fea_mask = np.random.random(train_fea.shape)
-                fea_loc = np.where(fea_mask < fea_fraction)
-                random_mat = np.random.random(train_label.shape)
-                label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
+fixed_parameter = [kd,alpha,delta,lambda2]
+for kx in [8,15,30]:
+    for lambda0 in [0.01,0.05,0.1,0.8,1.2,2.5,5]: ### 3 
+        for lambda1 in [0.01,0.05,0.1,0.5,0.8]: ### 3
+            for delta in [0.1,0.5,1,5,10]: ### 3
+                gd_reconstruction_one_round = []
+                gd_acc_one_round = []
+                reconstruction_one_round = []
+                acc_one_round = []
+                parameter_list.append([lambda0,lambda1,delta])
+                for iround in range(10): ### 10 
+                    fea_fraction = 0.8
+                    label_fraction = 0.8
+                    fea_mask = np.random.random(train_fea.shape)
+                    fea_loc = np.where(fea_mask < fea_fraction)
+                    random_mat = np.random.random(train_label.shape)
+                    label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
 
-                #### baseline
-                W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda1,kx)
-                U_lr, V_lr = completionLR(train_fea,kx,fea_loc,lambda0)
-                #### comparison
-                U_opt1,V_opt1,W_opt1,H_opt1,A_opt1 = completionPUV1(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx,kd)
-                #### evaluation metrics 
-                lr_error = acc_feature(train_fea,U_lr,V_lr,fea_loc)
-                pu_label = acc_label(train_label,W_pu,H_pu,label_loc)
-                opt_error = acc_feature1(train_fea,A_opt1,U_opt1,V_opt1,fea_loc)
-                opt_label = acc_label1(train_label,A_opt1,W_opt1,H_opt1,label_loc)
-                #### store into list
-                gd_reconstruction_one_round.append(lr_error)
-                gd_acc_one_round.append(pu_label)
-                reconstruction_one_round.append(opt_error)
-                acc_one_round.append(opt_label)
-                print 'reconstruction:  ' + str(lr_error) + ' ' + str(opt_error)
-                print 'auc:  ' + str(pu_label) + ' ' + str(opt_label)
+                    #### baseline
+                    W_pu,H_pu = baselinePU(train_label,label_loc,alpha,lambda1,kx)
+                    U_lr, V_lr = completionLR(train_fea,kx,fea_loc,lambda0)
+                    #### comparison
+                    U_opt1,V_opt1,W_opt1,H_opt1,A_opt1 = completionPUV1(train_fea,train_label,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx,kd)
+                    #### evaluation metrics 
+                    lr_error = acc_feature(train_fea,U_lr,V_lr,fea_loc)
+                    pu_label = acc_label(train_label,W_pu,H_pu,label_loc)
+                    opt_error = acc_feature1(train_fea,A_opt1,U_opt1,V_opt1,fea_loc)
+                    opt_label = acc_label1(train_label,A_opt1,W_opt1,H_opt1,label_loc)
+                    #### store into list
+                    gd_reconstruction_one_round.append(lr_error)
+                    gd_acc_one_round.append(pu_label)
+                    reconstruction_one_round.append(opt_error)
+                    acc_one_round.append(opt_label)
+                    print 'reconstruction:  ' + str(lr_error) + ' ' + str(opt_error)
+                    print 'auc:  ' + str(pu_label) + ' ' + str(opt_label)
              
-            gd_reconstruction_error_list.append(gd_reconstruction_one_round)
-            gd_auc_score_list.append(gd_acc_one_round)
-            reconstruction_error_list.append(reconstruction_one_round)
-            auc_score_list.append(acc_one_round)
+                gd_reconstruction_error_list.append(gd_reconstruction_one_round)
+                gd_auc_score_list.append(gd_acc_one_round)
+                reconstruction_error_list.append(reconstruction_one_round)
+                auc_score_list.append(acc_one_round)
 
 #lambda0 = 0.05
 #lambda1 = 0.01
@@ -450,12 +479,12 @@ for lambda0 in [0.01,0.05,0.1,0.5]: ### 3
 import pickle
 import numpy as np 
 
-result_file_name = 'yeast_result_coembedding.pickle'
-#with open(result_file_name,'wb') as f:
-#    pickle.dump([gd_reconstruction_error_list,gd_auc_score_list,reconstruction_error_list,auc_score_list,parameter_list,fixed_parameter],f)
+result_file_name = 'scene_result_coembedding.pickle'
+with open(result_file_name,'wb') as f:
+    pickle.dump([gd_reconstruction_error_list,gd_auc_score_list,reconstruction_error_list,auc_score_list,parameter_list,fixed_parameter],f)
 
-with open(result_file_name,'rb') as f:
-    [gd_reconstruction_error_list,gd_auc_score_list,reconstruction_error_list,auc_score_list,parameter_list,fixed_parameter] = pickle.load(f)
+#with open(result_file_name,'rb') as f:
+#    [gd_reconstruction_error_list,gd_auc_score_list,reconstruction_error_list,auc_score_list,parameter_list,fixed_parameter] = pickle.load(f)
     
 #### mean and variance 
 gd_reconstruction_error_mean = []
