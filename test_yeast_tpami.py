@@ -125,6 +125,13 @@ def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx):
     #gamma = 15 # 15 
     featuremask = np.ones(M.shape)
     labelmask = np.ones(M.shape)
+    
+    for i in range(fea_dim):
+        featuremask[i+label_dim,:] = 1.
+
+    for i in range(label_dim):
+        labelmask[i,:] = 1.
+    
     for i in range(len(label_loc_x)):
         labelmask[label_loc_y[i],label_loc_x[i]] = 0.
 
@@ -232,11 +239,29 @@ train_fea = yeast_data
 train_label = yeast_label
 
 
-fea_fraction = 0.6
+fea_fraction = 0.8
 label_fraction = 0.8
 
+#### debug
+#lambda0 = 1
+#miu = 10
+#gamma = 35
+#kx = 40
+#fea_mask = np.random.random(train_fea.shape)
+#fea_loc = np.where(fea_mask < fea_fraction)
+#random_mat = np.random.random(train_label.shape)
+#label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
+#fea_loc_x = fea_loc[0]
+#fea_loc_y = fea_loc[1]
+#label_loc_x = label_loc[0]
+#label_loc_y = label_loc[1]
+#U_pami, V_pami = TPAMI(train_fea,train_label,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx)
+#print 'lambda0: ' + str(miu)
+#auc_score, reconstruction_error = acc_pami(train_fea,train_label,U_pami,V_pami,fea_loc,label_loc)
+#print auc_score
+#print reconstruction_error
 
-gamma = 15.
+gamma = 20.
 kx = 10
 fixed_parameter = [gamma,kx]
 tpami_auc_score = []

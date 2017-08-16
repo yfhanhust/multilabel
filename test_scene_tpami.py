@@ -126,6 +126,13 @@ def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx):
     #gamma = 15 # 15 
     featuremask = np.ones(M.shape)
     labelmask = np.ones(M.shape)
+    
+    for i in range(fea_dim):
+        featuremask[i+label_dim,:] = 1.
+
+    for i in range(label_dim):
+        labelmask[i,:] = 1.
+    
     for i in range(len(label_loc_x)):
         labelmask[label_loc_y[i],label_loc_x[i]] = 0.
 
@@ -163,7 +170,6 @@ def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx):
             min_improvement = 0.0001)
 
     return U.get_value(),V.get_value()
-
     
 def acc_label(Y,Z,B,label_loc):
     Y_reconstructed = np.dot(Z,B.T)
