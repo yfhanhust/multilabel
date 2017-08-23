@@ -343,9 +343,12 @@ baseline_reg_list = []
 for lambda0 in [0.01,0.05,0.1,1,1.5,5]:
     baseline_reg_onelambda = []
     for round in range(30):
+        fea_mask = np.random.random(train_fea.shape)
+        fea_loc = np.where(fea_mask < fea_fraction)
         U_lr,V_lr = completionLR(train_fea,kx,fea_loc,lambda0)
         reg_error = acc_feature(train_fea,U_lr,V_lr,fea_loc)
         baseline_reg_onelambda.append(reg_error)
+        
     baseline_reg_list.append(baseline_reg_onelambda)
 
 mean_reg_list = []
