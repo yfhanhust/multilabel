@@ -3,6 +3,7 @@ import scipy as sp
 import downhill
 import theano
 from sklearn.metrics import roc_auc_score
+from numpy.linalg import svd 
 
 def completionPUV1(X,Y,fea_loc,label_loc,alpha,lambda0,lambda1,lambda2,delta,kx,kd):
 
@@ -177,7 +178,14 @@ def DirtyIMCv1(X,Y,fea_loc,label_loc,kx,ky,alpha,beta):
     featuremask[fea_loc] = 0
     
     #### generate dirty side information matrix, generated from corrupted labels 
-    X_corrupted = np.multiply(X,featuremask)
+    #X_corrupted = np.multiply(X,featuremask)
+    X_corrupted = X.copy()
+    X_corrupted[fea_loc] = -100
+    for i in range(X_corrupted.shape[1]):
+        single_col = X_corrupted[:,i]
+        value = np.mean(single_col[np.where(single_col > -10)[0]])
+        X_corrupted[np.where(single_col > -10),i] = value 
+         
     #### eigendecomposition
     u,s,v = svd(X_corrupted)
     #ind = np.argsort(-1.*s)
@@ -285,22 +293,34 @@ train_label = yeast_label
 
 #fea_fraction = 0.6
 #label_fraction = 0.8
-
+alpha = (1. + 0.6)/2 ### insensitive parameter in PU matrix completion
+fea_fraction = 0.6
+label_fraction = 0.8
 auc_nips_list = []
 parameter_list = []
 for kx in [10,30,100]:
-    for ky in [10,30,100]
+    for ky in [10,30,100]:
         for alpha in [0.01,0.1,0.5,1,5]:
             for beta in [0.01,0.1,0.5,1,5]:
                 parameter_list.append([alpha,beta,kx,ky])
                 single_auc = []
-                for iround in range(10):
+                for iround in range(5):
                     fea_fraction = 0.6
                     label_fraction = 0.8
                     fea_mask = np.random.random(train_fea.shape)
                     fea_loc = np.where(fea_mask < fea_fraction)
-                    random_mat = np.random.random(train_label.shape)
-                    label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
+                    #random_mat = np.random.random(train_label.shape)
+                    #label_loc = np.where(random_mat < label_fraction) ## locate the masked entries in the label matrix
+                    #### testing baseline PU 
+                    pos_entries = np.where(train_label == 1)
+                    pos_ind = np.array(range(len(pos_entries[0])))
+                    np.random.shuffle(pos_ind)
+                    labelled_ind = pos_ind[0:int(float(len(pos_ind))*(1-label_fraction))] # 30% of 1s are preserved 
+                    labelled_mask = np.zeros(train_label.shape)
+                    for i in labelled_ind:
+                        labelled_mask[pos_entries[0][i],pos_entries[1][i]] = 1
+
+                    label_loc = np.where(labelled_mask == 0)
                     U,V,W,H,F = DirtyIMCv1(train_fea,train_label,fea_loc,label_loc,kx,ky,alpha,beta)
                     ### reconstruction error 
                     #### reconstruction 
@@ -311,11 +331,12 @@ for kx in [10,30,100]:
                     ground_truth = train_label[label_loc].tolist()
                     auc_score = roc_auc_score(np.array(ground_truth),np.array(reconstruction))
                     single_auc.append(auc_score)
+                    print str(auc_score) + ' ' + 'round: ' + str(iround)
                 
-             auc_nips_list.append(single_auc)
+            auc_nips_list.append(single_auc)
 
 import pickle
-result_file_name = 'yeast_result_nips.pickle'
+result_file_name = 'yeast_result_nips_08.pickle'
 with open(result_file_name,'wb') as f:
     pickle.dump([auc_aaai_list,parameter_list,kx],f)
 
