@@ -107,8 +107,8 @@ label_loc_test = np.where(labelled_mask == 0) #### label_loc_test: missing entri
 yeast_label_masked = yeast_label.copy()
 yeast_label_masked[label_loc_test] = 0. #### weak label assignments
 
-nrank = 20
-lr = tf.constant(.008, name='learning_rate')
+nrank = 10
+lr = tf.constant(.1, name='learning_rate')
 alpha = (1. + 0.6)/2
 lambda0 = 0.1
 alpha_weight = tf.constant((1.-alpha),name='alpha') ### 1 - alpha
@@ -124,13 +124,11 @@ R = tf.gather(result_flatten, label_loc_x * yeast_label.shape[1] + label_loc_y, 
 observed_labels = yeast_label[label_loc]
 
 diff_op = tf.subtract(R, observed_labels, name='trainig_diff')
-base_cost = tf.reduce_mean(tf.pow(diff_op,2), name="sum_squared_error")
-weighted_base_cost = tf.multiply(base_cost,beta_weight,name='weighted_base_cost')
+base_cost = tf.reduce_mean(tf.multiply(tf.pow(diff_op,2),beta_weight), name="sum_squared_error")
 
 diff_op1 = tf.subtract(M,yeast_label_masked,name='training_diff_full')
-base_cost1 = tf.reduce_mean(tf.pow(diff_op1,2), name="sum_squared_error_full")
-weighted_base_cost1 =  tf.multiply(base_cost1,alpha_weight,name='weighted_base_cost_full')
-full_base_cost = tf.add(weighted_base_cost,weighted_base_cost1)
+base_cost1 = tf.reduce_mean(tf.multiply(tf.pow(diff_op1,2),alpha_weight), name="sum_squared_error_full")
+full_base_cost = tf.add(base_cost,base_cost1)
 
 ##### regularization
 U_frobenius_norm = tf.reduce_mean(tf.pow(U,2,name='use_fnorm'))
@@ -142,7 +140,8 @@ cost = tf.add(full_base_cost, regularizer)
 global_step = tf.Variable(0, trainable=False)
 #learning_rate = tf.train.exponential_decay(lr, global_step, 10000, 0.96, staircase=True)
 #training_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cost)
-training_step = tf.train.RMSPropOptimizer(lr,0.1,0.0,1e-10).minimize(cost)
+#training_step = tf.train.RMSPropOptimizer(lr,0.9,0.0,1e-10).minimize(cost)
+training_step = tf.train.AdagradOptimizer(lr).minimize(cost)
 init = tf.initialize_all_variables()
 sess = tf.Session()
 sess.run(init)
@@ -151,7 +150,6 @@ for i in xrange(1500):
     
 #### evaluate reconstruction accuracy 
 ground_truth = train_label[label_loc_test].tolist()
-
 U_mat = U.eval(sess)
 V_mat = V.eval(sess)
 yeast_label_reconstruction = np.dot(U_mat,V_mat)
@@ -161,8 +159,9 @@ print auc_score
 
 
 ##### comparison 
-W_pu,H_pu = baselinePU(yeast_label_masked,label_loc_test,alpha,lambda0,10)
-Y_reconstructed = np.dot(W_pu,H_pu.T)
-reconstruction = Y_reconstructed[label_loc_test].tolist()
-auc_score = roc_auc_score(np.array(ground_truth),np.array(reconstruction))
-print auc_score
+
+#W_pu,H_pu = baselinePU(yeast_label_masked,label_loc_test,alpha,lambda0,10)
+#Y_reconstructed = np.dot(W_pu,H_pu.T)
+#reconstruction = Y_reconstructed[label_loc_test].tolist()
+#auc_score = roc_auc_score(np.array(ground_truth),np.array(reconstruction))
+#print auc_score
