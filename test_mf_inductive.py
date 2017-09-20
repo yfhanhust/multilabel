@@ -38,7 +38,7 @@ def baselinePU(Y,label_loc,alpha,vlambda,kx):
             algo='rmsprop',
             batch_size=Y.shape[0],
             max_gradient_norm=1,
-            learning_rate=0.06,
+            learning_rate=0.05,
             min_improvement = 0.0001)
 
     return W.get_value(),H.get_value()
@@ -138,10 +138,10 @@ regularizer = tf.multiply(norm_sums, lda, 'regularizer')
 
 cost = tf.add(full_base_cost, regularizer)
 global_step = tf.Variable(0, trainable=False)
-#learning_rate = tf.train.exponential_decay(lr, global_step, 10000, 0.96, staircase=True)
-#training_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cost)
+learning_rate = tf.train.exponential_decay(lr, global_step, 10000, 0.96, staircase=True)
+training_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cost)
 #training_step = tf.train.RMSPropOptimizer(lr,0.9,0.0,1e-10).minimize(cost)
-training_step = tf.train.AdagradOptimizer(lr).minimize(cost)
+#training_step = tf.train.AdagradOptimizer(lr).minimize(cost)
 init = tf.initialize_all_variables()
 sess = tf.Session()
 sess.run(init)
@@ -160,8 +160,8 @@ print auc_score
 
 ##### comparison 
 
-#W_pu,H_pu = baselinePU(yeast_label_masked,label_loc_test,alpha,lambda0,10)
-#Y_reconstructed = np.dot(W_pu,H_pu.T)
-#reconstruction = Y_reconstructed[label_loc_test].tolist()
-#auc_score = roc_auc_score(np.array(ground_truth),np.array(reconstruction))
-#print auc_score
+W_pu,H_pu = baselinePU(yeast_label_masked,label_loc_test,alpha,lambda0,nrank)
+Y_reconstructed = np.dot(W_pu,H_pu.T)
+reconstruction = Y_reconstructed[label_loc_test].tolist()
+auc_score = roc_auc_score(np.array(ground_truth),np.array(reconstruction))
+print auc_score
