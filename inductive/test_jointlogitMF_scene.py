@@ -266,6 +266,10 @@ lambda3 = optimal_parameter[3]
 lambda4 = optimal_parameter[4]
 trade_off = optimal_parameter[5]
 test_result_score_opt = []
+fea_fraction = 0.6
+label_fraction = 0.8
+ind_scene_data = np.array(range(scene_data.shape[0]))
+nsample = scene_data.shape[0]
 for train_split in range(10):
     num_train = int(nsample * 0.8)
     num_test = nsample - num_train
@@ -286,7 +290,7 @@ for train_split in range(10):
         for i in labelled_ind:
             labelled_mask[pos_entries[0][i],pos_entries[1][i]] = 1
 
-        label_loc = np.where(labelled_mask == 1) #### label_loc: observed entries 
+        label_loc = np.where(labelled_mask == 0) #### label_loc: entries should be masked 
         train_label_masked = train_label.copy()
         train_label_masked[label_loc] = 0. #### weak label assignments
     
