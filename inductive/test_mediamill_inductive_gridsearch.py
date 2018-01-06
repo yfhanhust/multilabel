@@ -172,49 +172,60 @@ def LogitMF(Y,lambda0,prob,nrank):
 train_file = open('Mediamill_data.txt','r')
 train_file_lines = train_file.readlines(100000000000000000)
 train_file.close()
-train_fea = np.zeros((43907,120),dtype=float)
-train_label = np.zeros((43907,101),dtype=int)
+media_fea = np.zeros((43907,120),dtype=float)
+media_label = np.zeros((43907,101),dtype=int)
 for k in range(1,len(train_file_lines)):
     data_segs = train_file_lines[k].split(' ')
     label_line = data_segs[0]
     labels = label_line.split(',')
     if (len(labels) == 0) or (labels[0] == ''):
-        train_label[k-1,0] = 0
+        media_label[k-1,0] = 0
     else:
         for i in range(len(labels)):
-            train_label[k-1,int(labels[i])-1] = 1
+            media_label[k-1,int(labels[i])-1] = 1
 
     for i in range(1,len(data_segs)):
         fea_pair = data_segs[i].split(':')
         fea_idx = int(fea_pair[0])
         fea_val = float(fea_pair[1])
-        train_fea[k-1,fea_idx] = fea_val
+        media_fea[k-1,fea_idx] = fea_val
 
 fraction = []
 
-for i in range(train_label.shape[1]):
-    single_label = train_label[:,i]
+for i in range(media_label.shape[1]):
+    single_label = media_label[:,i]
     fraction.append(np.where(single_label > 0)[0].shape[0] / float(len(single_label)))
 
 sort_fraction = np.argsort(-1*np.array(fraction))
-train_label_sub = train_label[:,sort_fraction[0:20]]
+media_label = media_label[:,sort_fraction[0:20]]
 
+##### divide training data and testing data
+nsample = media_fea.shape[0]
+ind_media_data = np.array(range(nsample))
+num_train = int(nsample * 0.8)
+num_test = nsample - num_train
+np.random.shuffle(ind_media_data)
+train_fea = media_fea[ind_media_data[0:num_train],:]
+test_fea = media_fea[ind_media_data[num_train:],:]
+train_label = media_label[ind_media_data[0:num_train],:]
+test_label = media_label[ind_media_data[num_train:],:]
 fea_fraction = 0.6
 label_fraction = 0.8
 fea_mask = np.random.random(train_fea.shape)
 fea_loc = np.where(fea_mask < fea_fraction) ### indexes of the unobserved entries 
 
-pos_entries = np.where(train_label_sub == 1)
+pos_entries = np.where(train_label == 1)
 pos_ind = np.array(range(len(pos_entries[0])))
 np.random.shuffle(pos_ind)
 labelled_ind = pos_ind[0:int(float(len(pos_ind))*(1-label_fraction))] # 20% of 1s are preserved 
-labelled_mask = np.zeros(train_label_sub.shape)
+labelled_mask = np.zeros(train_label.shape)
 for i in labelled_ind:
     labelled_mask[pos_entries[0][i],pos_entries[1][i]] = 1
 
 label_loc = np.where(labelled_mask == 0) #### label_loc: observed entries 
-train_label_masked = train_label_sub.copy()
+train_label_masked = train_label.copy()
 train_label_masked[label_loc] = 0. #### weak label assignments
+
 
 auc_score_test_gridsearch = []
 auc_score_train_gridsearch = []
@@ -225,9 +236,9 @@ for prob in [0.0001,0.001,0.01,0.1,0.2]: # 3
         for lambda1 in [0.5,1,5,10,15,20,30]: #7 
             for lambda2 in [0.5,1,5,10,15,20,30]: # 7
                 for lambda3 in [0.5,1,5,10,15,20,25,30]:#8
-                    U,V,W,H,M,N = LogitCoupledMFInductiveSim(train_data,train_label_masked,fea_loc,prob,nrank,lambda0,lambda1,lambda2,lambda3)
+                    U,V,W,H,M,N = LogitCoupledMFInductiveSim(train_fea,train_label_masked,fea_loc,prob,nrank,lambda0,lambda1,lambda2,lambda3)
                     WH = np.dot(W,H)
-                    score_test = np.ndarray.flatten(np.dot(test_data,WH))
+                    score_test = np.ndarray.flatten(np.dot(test_fea,WH))
                     score_test = 1./(1. + np.exp(-1*score_test))
                     ground_truth_test = np.ndarray.flatten(test_label)
                     auc_score_test_logit = roc_auc_score(ground_truth_test,score_test)
@@ -261,17 +272,18 @@ label_fraction = 0.5
 fea_mask = np.random.random(train_fea.shape)
 fea_loc = np.where(fea_mask < fea_fraction) ### indexes of the unobserved entries 
 
-pos_entries = np.where(train_label_sub == 1)
+pos_entries = np.where(train_label == 1)
 pos_ind = np.array(range(len(pos_entries[0])))
 np.random.shuffle(pos_ind)
 labelled_ind = pos_ind[0:int(float(len(pos_ind))*(1-label_fraction))] # 20% of 1s are preserved 
-labelled_mask = np.zeros(train_label_sub.shape)
+labelled_mask = np.zeros(train_label.shape)
 for i in labelled_ind:
     labelled_mask[pos_entries[0][i],pos_entries[1][i]] = 1
 
 label_loc = np.where(labelled_mask == 0) #### label_loc: observed entries 
-train_label_masked = train_label_sub.copy()
+train_label_masked = train_label.copy()
 train_label_masked[label_loc] = 0. #### weak label assignments
+
 
 auc_score_test_gridsearch = []
 auc_score_train_gridsearch = []
@@ -282,9 +294,9 @@ for prob in [0.0001,0.001,0.01,0.1,0.2]: # 3
         for lambda1 in [0.5,1,5,10,15,20,30]: #7 
             for lambda2 in [0.5,1,5,10,15,20,30]: # 7
                 for lambda3 in [0.5,1,5,10,15,20,25,30]:#8
-                    U,V,W,H,M,N = LogitCoupledMFInductiveSim(train_data,train_label_masked,fea_loc,prob,nrank,lambda0,lambda1,lambda2,lambda3)
+                    U,V,W,H,M,N = LogitCoupledMFInductiveSim(train_fea,train_label_masked,fea_loc,prob,nrank,lambda0,lambda1,lambda2,lambda3)
                     WH = np.dot(W,H)
-                    score_test = np.ndarray.flatten(np.dot(test_data,WH))
+                    score_test = np.ndarray.flatten(np.dot(test_fea,WH))
                     score_test = 1./(1. + np.exp(-1*score_test))
                     ground_truth_test = np.ndarray.flatten(test_label)
                     auc_score_test_logit = roc_auc_score(ground_truth_test,score_test)
@@ -312,23 +324,24 @@ for prob in [0.0001,0.001,0.01,0.1,0.2]: # 3
 import pickle
 with open('mediamill_inductive_grid_search_05.pickle','wb') as f:
        pickle.dump([parameters,auc_score_train_gridsearch,auc_score_test_gridsearch],f)
-       
+
 fea_fraction = 0.6
 label_fraction = 0.3
 fea_mask = np.random.random(train_fea.shape)
 fea_loc = np.where(fea_mask < fea_fraction) ### indexes of the unobserved entries 
 
-pos_entries = np.where(train_label_sub == 1)
+pos_entries = np.where(train_label == 1)
 pos_ind = np.array(range(len(pos_entries[0])))
 np.random.shuffle(pos_ind)
 labelled_ind = pos_ind[0:int(float(len(pos_ind))*(1-label_fraction))] # 20% of 1s are preserved 
-labelled_mask = np.zeros(train_label_sub.shape)
+labelled_mask = np.zeros(train_label.shape)
 for i in labelled_ind:
     labelled_mask[pos_entries[0][i],pos_entries[1][i]] = 1
 
 label_loc = np.where(labelled_mask == 0) #### label_loc: observed entries 
-train_label_masked = train_label_sub.copy()
+train_label_masked = train_label.copy()
 train_label_masked[label_loc] = 0. #### weak label assignments
+
 
 auc_score_test_gridsearch = []
 auc_score_train_gridsearch = []
@@ -339,9 +352,9 @@ for prob in [0.0001,0.001,0.01,0.1,0.2]: # 3
         for lambda1 in [0.5,1,5,10,15,20,30]: #7 
             for lambda2 in [0.5,1,5,10,15,20,30]: # 7
                 for lambda3 in [0.5,1,5,10,15,20,25,30]:#8
-                    U,V,W,H,M,N = LogitCoupledMFInductiveSim(train_data,train_label_masked,fea_loc,prob,nrank,lambda0,lambda1,lambda2,lambda3)
+                    U,V,W,H,M,N = LogitCoupledMFInductiveSim(train_fea,train_label_masked,fea_loc,prob,nrank,lambda0,lambda1,lambda2,lambda3)
                     WH = np.dot(W,H)
-                    score_test = np.ndarray.flatten(np.dot(test_data,WH))
+                    score_test = np.ndarray.flatten(np.dot(test_fea,WH))
                     score_test = 1./(1. + np.exp(-1*score_test))
                     ground_truth_test = np.ndarray.flatten(test_label)
                     auc_score_test_logit = roc_auc_score(ground_truth_test,score_test)
