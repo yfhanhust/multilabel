@@ -327,6 +327,80 @@ for lambda0 in [0.001,0.01,0.1,1,10,100]:
         tpami_auc_score.append(auc_score)
         #tpami_reconstruction_error.append(single_round_error)
 
+
+gamma = 15.
+kx = 30
+tpami_auc_score_05 = []
+fea_fraction = 0.6
+label_fraction = 0.5
+fea_mask = np.random.random(train_fea.shape)
+fea_loc = np.where(fea_mask < fea_fraction) ### indexes of the observed entries 
+
+pos_entries = np.where(train_label_sub == 1)
+pos_ind = np.array(range(len(pos_entries[0])))
+np.random.shuffle(pos_ind)
+labelled_ind = pos_ind[0:int(float(len(pos_ind))*(1-label_fraction))] # 20% of 1s are preserved 
+labelled_mask = np.zeros(train_label_sub.shape)
+for i in labelled_ind:
+    labelled_mask[pos_entries[0][i],pos_entries[1][i]] = 1
+
+label_loc = np.where(labelled_mask == 0) #### label_loc: observed entries 
+parameter_list = []
+tpami_auc_score = []
+for lambda0 in [0.001,0.01,0.1,1,10,100]:
+    for miu in [0.01,0.1,1,5]:
+        parameter_list.append((lambda0,miu))
+        fea_loc_x = fea_loc[0]
+        fea_loc_y = fea_loc[1]
+        label_loc_x = label_loc[0]
+        label_loc_y = label_loc[1]
+        U_pami, V_pami = TPAMI(train_fea,train_label_sub,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx)
+        reconstructed_val = np.dot(U_pami,V_pami.T).T
+        nsample = train_fea.shape[0]
+        nXdim = train_fea.shape[1]
+        nYdim = train_label_sub.shape[1]
+        X_reconstruction = reconstructed_val[:,nYdim:]
+        Y_reconstruction = reconstructed_val[:,:nYdim]
+        auc_score = roc_auc_score(np.array(train_label_sub[label_loc].tolist()),np.array(Y_reconstruction[label_loc].tolist()))
+        print auc_score     
+        tpami_auc_score_05.append(auc_score)
+
+gamma = 15.
+kx = 30
+tpami_auc_score_03 = []
+fea_fraction = 0.6
+label_fraction = 0.3
+fea_mask = np.random.random(train_fea.shape)
+fea_loc = np.where(fea_mask < fea_fraction) ### indexes of the observed entries 
+
+pos_entries = np.where(train_label_sub == 1)
+pos_ind = np.array(range(len(pos_entries[0])))
+np.random.shuffle(pos_ind)
+labelled_ind = pos_ind[0:int(float(len(pos_ind))*(1-label_fraction))] # 20% of 1s are preserved 
+labelled_mask = np.zeros(train_label_sub.shape)
+for i in labelled_ind:
+    labelled_mask[pos_entries[0][i],pos_entries[1][i]] = 1
+
+label_loc = np.where(labelled_mask == 0) #### label_loc: observed entries 
+parameter_list = []
+tpami_auc_score = []
+for lambda0 in [0.001,0.01,0.1,1,10,100]:
+    for miu in [0.01,0.1,1,5]:
+        parameter_list.append((lambda0,miu))
+        fea_loc_x = fea_loc[0]
+        fea_loc_y = fea_loc[1]
+        label_loc_x = label_loc[0]
+        label_loc_y = label_loc[1]
+        U_pami, V_pami = TPAMI(train_fea,train_label_sub,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx)
+        reconstructed_val = np.dot(U_pami,V_pami.T).T
+        nsample = train_fea.shape[0]
+        nXdim = train_fea.shape[1]
+        nYdim = train_label_sub.shape[1]
+        X_reconstruction = reconstructed_val[:,nYdim:]
+        Y_reconstruction = reconstructed_val[:,:nYdim]
+        auc_score = roc_auc_score(np.array(train_label_sub[label_loc].tolist()),np.array(Y_reconstruction[label_loc].tolist()))
+        print auc_score     
+        tpami_auc_score_03.append(auc_score)
 '''
 fea_fraction = 0.6
 label_fraction = 0.8
