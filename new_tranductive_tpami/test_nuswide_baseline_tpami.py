@@ -212,8 +212,8 @@ def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx):
     label_dim = Y.shape[1]
     fea_dim = X.shape[1]
     #gamma = 15 # 15 
-    featuremask = np.ones(M.shape)
-    labelmask = np.ones(M.shape)
+    featuremask = np.zeros(M.shape)
+    labelmask = np.zeros(M.shape)
     
     for i in range(fea_dim):
         featuremask[i+label_dim,:] = 1.
@@ -222,10 +222,10 @@ def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx):
         labelmask[i,:] = 1.
     
     for i in range(len(label_loc_x)):
-        labelmask[label_loc_y[i],label_loc_x[i]] = 0.
+        labelmask[label_loc_y[i],label_loc_x[i]] = 0. #### label_loc: unobserved labels 
 
     for i in range(len(fea_loc_x)):
-        featuremask[fea_loc_y[i]+label_dim,fea_loc_x[i]] = 0.
+        featuremask[fea_loc_y[i]+label_dim,fea_loc_x[i]] = 0. #### unobserved features 
 
     #### Theano and downhill
     U = theano.shared(np.random.random((M.shape[0],kx)),name='U')
@@ -258,6 +258,7 @@ def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx):
             min_improvement = 0.0001)
 
     return U.get_value(),V.get_value()
+
 
 with open('../inductive/nus_test.csv','rb') as f:
      feature_lines = f.readlines(100000000000000000)
@@ -296,7 +297,7 @@ tpami_auc_score = []
 fea_fraction = 0.6
 label_fraction = 0.8
 fea_mask = np.random.random(nus_data.shape)
-fea_loc = np.where(fea_mask < (1.-fea_fraction)) ### indexes of the observed entries 
+fea_loc = np.where(fea_mask < fea_fraction) ### indexes of the observed entries 
 
 pos_entries = np.where(nus_label == 1)
 pos_ind = np.array(range(len(pos_entries[0])))
@@ -335,7 +336,7 @@ tpami_auc_score = []
 fea_fraction = 0.6
 label_fraction = 0.5
 fea_mask = np.random.random(nus_data.shape)
-fea_loc = np.where(fea_mask < (1.-fea_fraction)) ### indexes of the observed entries 
+fea_loc = np.where(fea_mask < fea_fraction) ### indexes of the observed entries 
 
 pos_entries = np.where(nus_label == 1)
 pos_ind = np.array(range(len(pos_entries[0])))
@@ -373,7 +374,7 @@ tpami_auc_score = []
 fea_fraction = 0.6
 label_fraction = 0.3
 fea_mask = np.random.random(nus_data.shape)
-fea_loc = np.where(fea_mask < (1.-fea_fraction)) ### indexes of the observed entries 
+fea_loc = np.where(fea_mask < fea_fraction) ### indexes of the observed entries 
 
 pos_entries = np.where(nus_label == 1)
 pos_ind = np.array(range(len(pos_entries[0])))
