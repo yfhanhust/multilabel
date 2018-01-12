@@ -212,8 +212,8 @@ def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx):
     label_dim = Y.shape[1]
     fea_dim = X.shape[1]
     #gamma = 15 # 15 
-    featuremask = np.ones(M.shape)
-    labelmask = np.ones(M.shape)
+    featuremask = np.zeros(M.shape)
+    labelmask = np.zeros(M.shape)
     
     for i in range(fea_dim):
         featuremask[i+label_dim,:] = 1.
@@ -222,10 +222,10 @@ def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx):
         labelmask[i,:] = 1.
     
     for i in range(len(label_loc_x)):
-        labelmask[label_loc_y[i],label_loc_x[i]] = 0.
+        labelmask[label_loc_y[i],label_loc_x[i]] = 0. #### label_loc: unobserved labels 
 
     for i in range(len(fea_loc_x)):
-        featuremask[fea_loc_y[i]+label_dim,fea_loc_x[i]] = 0.
+        featuremask[fea_loc_y[i]+label_dim,fea_loc_x[i]] = 0. #### unobserved features 
 
     #### Theano and downhill
     U = theano.shared(np.random.random((M.shape[0],kx)),name='U')
@@ -259,50 +259,49 @@ def TPAMI(X,Y,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx):
 
     return U.get_value(),V.get_value()
 
-with open('../inductive/nus_test.csv','rb') as f:
-     feature_lines = f.readlines(100000000000000000)
-     train_data = np.zeros((len(feature_lines)-1,128))
-     train_label = np.zeros((len(feature_lines)-1,81))
-     for k in range(1,len(feature_lines)):
-         feature_segs = feature_lines[k].split(',')
-         for i in range(1,129): ### 128-d feature vector
-             train_data[k-1,i-1] = float(feature_segs[i])
-         
-         for i in range(129,len(feature_segs)):
-             train_label[k-1,i-129] = int(feature_segs[i])
+train_file = open('Mediamill_data.txt','r')
+train_file_lines = train_file.readlines(100000000000000000)
+train_file.close()
+train_fea = np.zeros((43907,120),dtype=float)
+train_label = np.zeros((43907,101),dtype=int)
+for k in range(1,len(train_file_lines)):
+    data_segs = train_file_lines[k].split(' ')
+    label_line = data_segs[0]
+    labels = label_line.split(',')
+    if (len(labels) == 0) or (labels[0] == ''):
+        train_label[k-1,0] = 0
+    else:
+        for i in range(len(labels)):
+            train_label[k-1,int(labels[i])-1] = 1
 
-indexes = range(0,train_label.shape[0])
-np.random.shuffle(np.array(indexes))
-
-nus_data = train_data[indexes[0:5000],:]
-nus_label = train_label[indexes[0:5000],:]
-
-label_count = np.sum(nus_label,axis=0)
-label_indexes = np.where(label_count > 0)[0]
-nus_label = nus_label[:,label_indexes]
+    for i in range(1,len(data_segs)):
+        fea_pair = data_segs[i].split(':')
+        fea_idx = int(fea_pair[0])
+        fea_val = float(fea_pair[1])
+        train_fea[k-1,fea_idx] = fea_val
 
 fraction = []
 
-for i in range(nus_label.shape[1]):
-    single_label = nus_label[:,i]
+for i in range(train_label.shape[1]):
+    single_label = train_label[:,i]
     fraction.append(np.where(single_label > 0)[0].shape[0] / float(len(single_label)))
 
 sort_fraction = np.argsort(-1*np.array(fraction))
-nus_label = nus_label[:,sort_fraction[0:6]]
+train_label_sub = train_label[:,sort_fraction[0:20]]
 
 gamma = 15.
 kx = 30
 tpami_auc_score = []
 fea_fraction = 0.6
 label_fraction = 0.8
-fea_mask = np.random.random(nus_data.shape)
-fea_loc = np.where(fea_mask < (1.-fea_fraction)) ### indexes of the observed entries 
+fea_mask = np.random.random(train_fea.shape)
+fea_loc = np.where(fea_mask < fea_fraction) ### indexes of the observed entries 
 
-pos_entries = np.where(nus_label == 1)
+pos_entries = np.where(train_label_sub == 1)
 pos_ind = np.array(range(len(pos_entries[0])))
 np.random.shuffle(pos_ind)
 labelled_ind = pos_ind[0:int(float(len(pos_ind))*(1-label_fraction))] # 20% of 1s are preserved 
-labelled_mask = np.zeros(nus_label.shape)
+labelled_mask = np.zeros(train_label_sub.shape)
 for i in labelled_ind:
     labelled_mask[pos_entries[0][i],pos_entries[1][i]] = 1
 
@@ -316,14 +315,14 @@ for lambda0 in [0.001,0.01,0.1,1,10,100]:
         fea_loc_y = fea_loc[1]
         label_loc_x = label_loc[0]
         label_loc_y = label_loc[1]
-        U_pami, V_pami = TPAMI(nus_data,nus_label,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx)
+        U_pami, V_pami = TPAMI(train_fea,train_label_sub,fea_loc_x,fea_loc_y,label_loc_x,label_loc_y,miu,gamma,lambda0,kx)
         reconstructed_val = np.dot(U_pami,V_pami.T).T
-        nsample = nus_data.shape[0]
-        nXdim = nus_data.shape[1]
-        nYdim = nus_label.shape[1]
+        nsample = train_fea.shape[0]
+        nXdim = train_fea.shape[1]
+        nYdim = train_label_sub.shape[1]
         X_reconstruction = reconstructed_val[:,nYdim:]
         Y_reconstruction = reconstructed_val[:,:nYdim]
-        auc_score = roc_auc_score(np.array(nus_label[label_loc].tolist()),np.array(Y_reconstruction[label_loc].tolist()))
+        auc_score = roc_auc_score(np.array(train_label_sub[label_loc].tolist()),np.array(Y_reconstruction[label_loc].tolist()))
         print auc_score     
         tpami_auc_score.append(auc_score)
         #tpami_reconstruction_error.append(single_round_error)
